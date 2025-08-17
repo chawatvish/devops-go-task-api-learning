@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 env:
-  APP_NAME: 'go-task-api-xyz' # ชื่อ Web App ของคุณ
-  RG_NAME: 'rg-devops-go' # กลุ่มทรัพยากรของคุณ (ใช้ตอน deploy แบบ CLI)
+  APP_NAME: 'cw-task' # ชื่อ Web App ของคุณ
+  RG_NAME: 'WebApp-Resource' # กลุ่มทรัพยากรของคุณ (ใช้ตอน deploy แบบ CLI)
   PACKAGE: 'release.zip'
 
 jobs:
