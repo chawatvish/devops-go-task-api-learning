@@ -1,4 +1,4 @@
-name: CI/CD to Azure App Service (Go, OIDC)
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,38 +7,106 @@ on:
     branches: ['main']
 
 permissions:
-  id-token: write # สำคัญสำหรับ OIDC
+  id-token: write # Required for OIDC
   contents: read
 
 env:
-  APP_NAME: 'cw-task' # ชื่อ Web App ของคุณ
-  RG_NAME: 'WebApp-Resource' # กลุ่มทรัพยากรของคุณ (ใช้ตอน deploy แบบ CLI)
+  APP_NAME: 'cw-task' # Your Web App name
+  RG_NAME: 'WebApp-Resource' # Your resource group (used for CLI deployment)
   PACKAGE: 'release.zip'
 
 jobs:
-  build-test-deploy:
+  # Job for running tests on pull requests
+  test:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    name: Run Unit Tests
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
 
-      - name: Tidy & Test
-        run: |
-          go mod tidy
-          go test ./...
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-      - name: Build linux binary
+      - name: Tidy dependencies
+        run: go mod tidy
+
+      - name: Run unit tests
+        run: go test -v ./...
+
+      - name: Run tests with coverage
+        run: go test -v -coverprofile=coverage.out ./...
+
+      - name: Generate coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.out
+            coverage.html
+
+  # Job for building and deploying on main branch pushes
+  build-deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    name: Build and Deploy to Azure
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Tidy dependencies
+        run: go mod tidy
+
+      - name: Run unit tests
+        run: go test -v ./...
+
+      - name: Build Linux binary
         run: |
           GOOS=linux GOARCH=amd64 go build -o task-api .
           chmod +x task-api
 
-      - name: Zip artifact
+      - name: Create deployment package
         run: zip -r ${{ env.PACKAGE }} task-api
 
-      # Login ด้วย OIDC (ไม่ต้องมี secret/credential ยาว ๆ)
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package
+          path: ${{ env.PACKAGE }}
+
+      # Login with OIDC (no need for long secrets/credentials)
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -46,8 +114,8 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID || secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # วิธีที่ 1: ใช้ action ทางการ
-      - name: Deploy via WebApps Deploy Action
+      # Deploy using official action
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.APP_NAME }}
