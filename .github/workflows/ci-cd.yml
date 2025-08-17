@@ -1,54 +1,54 @@
-# name: CI/CD to Azure App Service (Go, OIDC)
+name: CI/CD to Azure App Service (Go, OIDC)
 
-# on:
-#   push:
-#     branches: ['main']
-#   pull_request:
-#     branches: ['main']
+on:
+  push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
 
-# permissions:
-#   id-token: write # สำคัญสำหรับ OIDC
-#   contents: read
+permissions:
+  id-token: write # สำคัญสำหรับ OIDC
+  contents: read
 
-# env:
-#   APP_NAME: 'cw-task' # ชื่อ Web App ของคุณ
-#   RG_NAME: 'WebApp-Resource' # กลุ่มทรัพยากรของคุณ (ใช้ตอน deploy แบบ CLI)
-#   PACKAGE: 'release.zip'
+env:
+  APP_NAME: 'cw-task' # ชื่อ Web App ของคุณ
+  RG_NAME: 'WebApp-Resource' # กลุ่มทรัพยากรของคุณ (ใช้ตอน deploy แบบ CLI)
+  PACKAGE: 'release.zip'
 
-# jobs:
-#   build-test-deploy:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-#       - uses: actions/setup-go@v5
-#         with:
-#           go-version: '1.22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
 
-#       - name: Tidy & Test
-#         run: |
-#           go mod tidy
-#           go test ./...
+      - name: Tidy & Test
+        run: |
+          go mod tidy
+          go test ./...
 
-#       - name: Build linux binary
-#         run: |
-#           GOOS=linux GOARCH=amd64 go build -o task-api .
-#           chmod +x task-api
+      - name: Build linux binary
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o task-api .
+          chmod +x task-api
 
-#       - name: Zip artifact
-#         run: zip -r ${{ env.PACKAGE }} task-api
+      - name: Zip artifact
+        run: zip -r ${{ env.PACKAGE }} task-api
 
-#       # Login ด้วย OIDC (ไม่ต้องมี secret/credential ยาว ๆ)
-#       - name: Azure Login (OIDC)
-#         uses: azure/login@v2
-#         with:
-#           client-id: ${{ vars.AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
-#           tenant-id: ${{ vars.AZURE_TENANT_ID || secrets.AZURE_TENANT_ID }}
-#           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID }}
+      # Login ด้วย OIDC (ไม่ต้องมี secret/credential ยาว ๆ)
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID || secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID || secrets.AZURE_SUBSCRIPTION_ID }}
 
-#       # วิธีที่ 1: ใช้ action ทางการ
-#       - name: Deploy via WebApps Deploy Action
-#         uses: azure/webapps-deploy@v3
-#         with:
-#           app-name: ${{ env.APP_NAME }}
-#           package: ${{ env.PACKAGE }}
+      # วิธีที่ 1: ใช้ action ทางการ
+      - name: Deploy via WebApps Deploy Action
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_NAME }}
+          package: ${{ env.PACKAGE }}
