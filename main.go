@@ -5,31 +5,30 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/chawatvish/go-task-api/service"
 	"github.com/gofiber/fiber/v2"
 )
 
-type Task struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
-var tasks = []Task{{ID: 1, Name: "Learn DevOps on Azure"}}
-
 func main() {
 	app := fiber.New()
+	taskService := service.NewTaskService()
 
+	// GET /tasks - Get all tasks
 	app.Get("/tasks", func(c *fiber.Ctx) error {
+		tasks := taskService.GetAllTasks()
 		return c.JSON(tasks)
 	})
 
+	// POST /tasks - Create a new task
 	app.Post("/tasks", func(c *fiber.Ctx) error {
-		var t Task
-		if err := c.BodyParser(&t); err != nil {
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := c.BodyParser(&req); err != nil {
 			return fiber.ErrBadRequest
 		}
-		t.ID = len(tasks) + 1
-		tasks = append(tasks, t)
-		return c.Status(fiber.StatusCreated).JSON(t)
+		task := taskService.CreateTask(req.Name)
+		return c.Status(fiber.StatusCreated).JSON(task)
 	})
 
 	// PUT /tasks/:id - Update a task
@@ -39,21 +38,19 @@ func main() {
 			return fiber.ErrBadRequest
 		}
 
-		var updatedTask Task
-		if err := c.BodyParser(&updatedTask); err != nil {
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := c.BodyParser(&req); err != nil {
 			return fiber.ErrBadRequest
 		}
 
-		// Find and update the task
-		for i, task := range tasks {
-			if task.ID == id {
-				tasks[i].Name = updatedTask.Name
-				tasks[i].ID = id // Keep the original ID
-				return c.JSON(tasks[i])
-			}
+		task, err := taskService.UpdateTask(id, req.Name)
+		if err != nil {
+			return fiber.ErrNotFound
 		}
 		
-		return fiber.ErrNotFound
+		return c.JSON(task)
 	})
 
 	// DELETE /tasks/:id - Delete a task
@@ -63,15 +60,66 @@ func main() {
 			return fiber.ErrBadRequest
 		}
 
-		// Find and delete the task
-		for i, task := range tasks {
-			if task.ID == id {
-				tasks = append(tasks[:i], tasks[i+1:]...)
-				return c.SendStatus(fiber.StatusNoContent)
-			}
+		err = taskService.DeleteTask(id)
+		if err != nil {
+			return fiber.ErrNotFound
 		}
 		
-		return fiber.ErrNotFound
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	// GET /tasks/:id/detail - Get detailed information about a task
+	app.Get("/tasks/:id/detail", func(c *fiber.Ctx) error {
+		id, err := strconv.Atoi(c.Params("id"))
+		if err != nil {
+			return fiber.ErrBadRequest
+		}
+
+		detail, err := taskService.GetTaskDetail(id)
+		if err != nil {
+			return fiber.ErrNotFound
+		}
+		
+		return c.JSON(detail)
+	})
+
+	// PUT /tasks/:id/detail - Update detailed information about a task
+	app.Put("/tasks/:id/detail", func(c *fiber.Ctx) error {
+		id, err := strconv.Atoi(c.Params("id"))
+		if err != nil {
+			return fiber.ErrBadRequest
+		}
+
+		var req struct {
+			Priority       string   `json:"priority"`
+			Tags           []string `json:"tags"`
+			EstimatedHours int      `json:"estimated_hours"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return fiber.ErrBadRequest
+		}
+
+		detail, err := taskService.UpdateTaskDetail(id, req.Priority, req.Tags, req.EstimatedHours)
+		if err != nil {
+			return fiber.ErrNotFound
+		}
+		
+		return c.JSON(detail)
+	})
+
+	// POST /tasks/:id/complete - Mark a task as completed
+	app.Post("/tasks/:id/complete", func(c *fiber.Ctx) error {
+		id, err := strconv.Atoi(c.Params("id"))
+		if err != nil {
+			return fiber.ErrBadRequest
+		}
+
+		err = taskService.MarkTaskCompleted(id)
+		if err != nil {
+			return fiber.ErrNotFound
+		}
+		
+		return c.SendStatus(fiber.StatusOK)
 	})
 
 	port := os.Getenv("PORT")
